@@ -107,10 +107,10 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES uwb_ros_node
-  CATKIN_DEPENDS roscpp rospy std_msgs
-  DEPENDS system_lib
+ # INCLUDE_DIRS include
+ # LIBRARIES uwb_ros_node
+ # CATKIN_DEPENDS roscpp rospy std_msgs
+ # DEPENDS system_lib
 )
 
 catkin_install_python(PROGRAMS scripts/pozyx_publisher.py

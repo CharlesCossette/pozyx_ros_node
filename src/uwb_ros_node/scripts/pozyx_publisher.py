@@ -486,8 +486,8 @@ def pozyx_node():
     # multiple. we can do this once we have it figured out for one. 
     # TODO: Position source not yet enabled.
     # TODO: allow_self_ranging to be a user option.
-    imu_source = PozyxImuSource(pozyxs[0])
-    range_source = PozyxRangeSource(pozyxs[0], exclude_ids=ids, 
+    imu_source = PozyxImuSource(pozyxs[1])
+    range_source = PozyxRangeSource(pozyxs[1], exclude_ids=ids,
                                             allow_self_ranging=False)
     #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
 

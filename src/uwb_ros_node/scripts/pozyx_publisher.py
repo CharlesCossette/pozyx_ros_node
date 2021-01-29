@@ -36,15 +36,16 @@ def findPozyxSerial():
     # Initialize connection to serial port.
     pozyx_serials = list()
     pozyx_ids = list()
-    for serial_port in pozyx_devices:
-        pozyx = pypozyx.PozyxSerial(serial_port)
-        who_am_i = pypozyx.NetworkID()
-        status = pozyx.getNetworkId(who_am_i)
-        if status == pypozyx.POZYX_FAILURE:
-            print("ERROR: Failed to obtain device ID.")
+    #for serial_port in pozyx_devices:
+    #print(serial_port)
+    pozyx = pypozyx.PozyxSerial('/dev/ttyACM0')
+    who_am_i = pypozyx.NetworkID()
+    status = pozyx.getNetworkId(who_am_i)
+    if status == pypozyx.POZYX_FAILURE:
+        print("ERROR: Failed to obtain device ID.")
 
-        pozyx_serials.append(pozyx)
-        pozyx_ids.append(who_am_i.id)
+    pozyx_serials.append(pozyx)
+    pozyx_ids.append(who_am_i.id)
 
     return pozyx_serials, pozyx_ids
 
@@ -81,11 +82,11 @@ def findNeighbors(pozyx, remote_id = None):
     # Print device list
     # TODO: we will have to check these print statements with the ROS framework.
     # What is the best way to print info to screen with ROS?
-    #id_string = "Device " + str(hex(self.id)) + " has discovered the following other devices: " 
-    #for id in device_list.data:
-    #    id_string += str(hex(id)) + ", "
+    id_string = "Device " + str(hex(who_am_i.id)) + " has discovered the following other devices: " 
+    for id in device_list.data:
+        id_string += str(hex(id)) + ", "
 
-    #print(id_string)
+    print(id_string)
 
     # if not allow_self_ranging:
     #     print("However, self-ranging is currently deactivated. " \
@@ -142,7 +143,7 @@ class PozyxImuSource(DataSource):
 
     def __init__(self, pozyx, accel=True, gyro=True, mag=True,
                  pres=True, euler=False, quat=False, remote_id=None):
-        super().__init__()
+        super(PozyxImuSource,self).__init__()
 
         # Settings
         self.record_accel = accel
@@ -279,7 +280,7 @@ class PozyxRangeSource(DataSource):
 
     def __init__(self, pozyx_serial, exclude_ids=[],
                  allow_self_ranging=True, remote_id=None):
-        super().__init__()
+        super(PozyxRangeSource, self).__init__()
         self.pozyx = pozyx_serial
         self.allow_self_ranging = allow_self_ranging
         self.exclude_ids = exclude_ids
@@ -486,8 +487,8 @@ def pozyx_node():
     # multiple. we can do this once we have it figured out for one. 
     # TODO: Position source not yet enabled.
     # TODO: allow_self_ranging to be a user option.
-    imu_source = PozyxImuSource(pozyxs[1])
-    range_source = PozyxRangeSource(pozyxs[1], exclude_ids=ids,
+    imu_source = PozyxImuSource(pozyxs[0])
+    range_source = PozyxRangeSource(pozyxs[0], exclude_ids=ids,
                                             allow_self_ranging=False)
     #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
 
@@ -504,18 +505,21 @@ def pozyx_node():
 
     rate = rospy.Rate(10) # 10hz - What does Husky actually use?
                           # TODO: we need to check this.
+    
     while not rospy.is_shutdown():
-        data_range = range_source.getData()
-        data_imu = imu_source.getData() 
+        data_range =  range_source.getData()
+        data_imu =  imu_source.getData()
         #data_pos = pos_source.getData() 
-
         # Isnt this meant for sporadic info instead of a huge datastream?
         #rospy.loginfo(**dict(zip(headers, data_values))) 
 
         # Pass the message using kwargs i.e. pub_range.publish(message_field_1='foo', message_field_2='bar')
+
+        # pub_range.publish(cat="1") 
+        print(headers_range)
         pub_range.publish(**dict(zip(headers_range, data_range))) 
-        pub_imu.publish(**dict(zip(headers_imu, data_imu))) 
-        #pub_pos.publish(**dict(zip(headers_pos, data_pos)))
+        pub_range.publish(**dict(zip(headers_range, data_range))) 
+
         rate.sleep()
 
 if __name__ == '__main__':

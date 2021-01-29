@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  message_generation
 )
 
 
@@ -54,7 +55,7 @@ find_package(catkin REQUIRED COMPONENTS
 # add_message_files(
 #   FILES
 #   Message1.msg
-#   Message2.msg
+   pozyx_msg.msg
 # )
 
 ## Generate services in the 'srv' folder
@@ -72,10 +73,10 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+generate_messages(
+   DEPENDENCIES
+   std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -110,7 +111,7 @@ catkin_package(
  # INCLUDE_DIRS include
  # LIBRARIES uwb_ros_node
  # CATKIN_DEPENDS roscpp rospy std_msgs
- # DEPENDS system_lib
+  DEPENDS message_runtime
 )
 
 catkin_install_python(PROGRAMS scripts/pozyx_publisher.py

@@ -3,6 +3,9 @@
 import pypozyx
 import rospy
 from std_msgs.msg import String
+
+# from package-name.msg import custom_msg
+from pozyx_ros_node.msg import range_msg, imu_msg
 from time import time
 
 # Yea so nanoseconds are really annoying. 
@@ -86,7 +89,7 @@ def findNeighbors(pozyx, remote_id = None):
     for id in device_list.data:
         id_string += str(hex(id)) + ", "
 
-    print(id_string)
+
 
     # if not allow_self_ranging:
     #     print("However, self-ranging is currently deactivated. " \
@@ -171,38 +174,37 @@ class PozyxImuSource(DataSource):
         Generates the header for the Pozyx IMU Source.
         """
         header_fields = list()
-        header_fields.append('Timestamp (ns) Clock Offset: ' + str(self.time_offset))
+        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
 
         # Generate the header string
         if self.record_accel:
-            header_fields.append(str(hex(self.id)) + " Accel_x (mg)")
-            header_fields.append(str(hex(self.id)) + " Accel_y (mg)")
-            header_fields.append(str(hex(self.id)) + " Accel_z (mg)")
+            header_fields.append("id_" + str(hex(self.id)) + "_Accel_x_mg")
+            header_fields.append("id_" + str(hex(self.id)) + "_Accel_y_mg")
+            header_fields.append("id_" + str(hex(self.id)) + "_Accel_z_mg")
 
         if self.record_gyro:
-            header_fields.append(str(hex(self.id)) + " Gyro_x (deg/s)")
-            header_fields.append(str(hex(self.id)) + " Gyro_y (deg/s)")
-            header_fields.append(str(hex(self.id)) + " Gyro_z (deg/s)")
+            header_fields.append("id_" + str(hex(self.id)) + "_Gyro_x_deg_s")
+            header_fields.append("id_" + str(hex(self.id)) + "_Gyro_y_deg_s")
+            header_fields.append("id_" + str(hex(self.id)) + "_Gyro_z_deg_s")
 
         if self.record_mag:
-            header_fields.append(str(hex(self.id)) + " Mag_x (uT)")
-            header_fields.append(str(hex(self.id)) + " Mag_y (uT)")
-            header_fields.append(str(hex(self.id)) + " Mag_z (uT)")
+            header_fields.append("id_" + str(hex(self.id)) + "_Mag_x_uT")
+            header_fields.append("id_" + str(hex(self.id)) + "_Mag_y_uT")
+            header_fields.append("id_" + str(hex(self.id)) + "_Mag_z_uT")
 
         if self.record_euler:
-            header_fields.append(str(hex(self.id)) + " Roll (deg)")
-            header_fields.append(str(hex(self.id)) + " Pitch (deg)")
-            header_fields.append(str(hex(self.id)) + " Yaw (deg)")
+            header_fields.append("id_" + str(hex(self.id)) + "_Roll_deg")
+            header_fields.append("id_" + str(hex(self.id)) + "_Pitch_deg")
+            header_fields.append("id_" + str(hex(self.id)) + "_Yaw_deg")
 
         if self.record_quat:
-            header_fields.append(str(hex(self.id)) + " Quat_w")
-            header_fields.append(str(hex(self.id)) + " Quat_x")
-            header_fields.append(str(hex(self.id)) + " Quat_y")
-            header_fields.append(str(hex(self.id)) + " Quat_z")
+            header_fields.append("id_" + str(hex(self.id)) + "_Quat_w")
+            header_fields.append("id_" + str(hex(self.id)) + "_Quat_x")
+            header_fields.append("id_" + str(hex(self.id)) + "_Quat_y")
+            header_fields.append("id_" + str(hex(self.id)) + "_Quat_z")
 
         if self.record_pres:
-            header_fields.append(str(hex(self.id)) + " Pressure (Pa)")
-
+            header_fields.append("id_" + str(hex(self.id)) + "_Pressure_Pa")
         return header_fields
 
     def getData(self):
@@ -301,18 +303,19 @@ class PozyxRangeSource(DataSource):
         self._number_of_neighbors = len(self.device_list.data)
 
     def getHeader(self):
+
         """
         Creates the header for the Pozyx Range source.
         """
         header_fields = list()
-        header_fields.append('Timestamp (ns) Clock Offset: ' + str(self.time_offset))
+        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
         for id in self.device_list.data:
-            header_fields.append(str(hex(self.id)) \
-                                 + ' to ' + str(hex(id)) + 'Boot Time Pozyx (ms)')
-            header_fields.append(str(hex(self.id)) \
-                                 + ' Range to ' + str(hex(id)) + ' (mm)')
-            header_fields.append(str(hex(self.id)) \
-                                 + ' RSS to ' + str(hex(id)) + ' (dB)')
+            header_fields.append("id_" + str(hex(self.id)) \
+                                 + '_to_' + str(hex(id)) + 'Boot_Time_Pozyx_ms')
+            header_fields.append("id_" + str(hex(self.id)) \
+                                 + '_Range_to_' + str(hex(id)) + '_mm')
+            header_fields.append("id_" + str(hex(self.id)) \
+                                 + '_RSS_to_' + str(hex(id)) + '_dB')
         return header_fields
 
     def getData(self):
@@ -338,14 +341,21 @@ class PozyxRangeSource(DataSource):
             # Put data in list.
             data_values = list()
             data_values.append(time_ns() - self.time_offset)
-            data_values += [" "] * 3 * self._neighbor_to_range
+            #data_values += [" "] * 3 * self._neighbor_to_range
+
+            # Placeholder for empty values here. 
+            # NaN's have to be Floats but we want to store these as integers. 
+            empty_data_value = 0
+            data_values += [empty_data_value] * 3 * self._neighbor_to_range
             if status_range == pypozyx.POZYX_SUCCESS:
                 data_values.append(device_range.timestamp)
                 data_values.append(device_range.distance)
                 data_values.append(device_range.RSS)
             else:
-                data_values += [" "] * 3
-            data_values += [" "] * 3 * (len(self.device_list.data) - 1 - self._neighbor_to_range)
+                #data_values += [" "] * 3
+                data_values += [empty_data_value] * 3
+            #data_values += [" "] * 3 * (len(self.device_list.data) - 1 - self._neighbor_to_range)
+            data_values += [empty_data_value] * 3 * (len(self.device_list.data) - 1 - self._neighbor_to_range)
 
             # New neighbor for next function call.
             if self._neighbor_to_range == (self._number_of_neighbors - 1):
@@ -403,7 +413,6 @@ class PozyxPositionSource(DataSource):
         for id in device_list.data:
             id_string += str(hex(id)) + ", "
 
-        print(id_string)
 
         # Perform the ranging, exclude self-ranging if user has chosen this.
         device_range = pypozyx.DeviceRange()
@@ -421,12 +430,12 @@ class PozyxPositionSource(DataSource):
         Creates the header for the pozyx position source.
         """
         header_fields = list()
-        header_fields.append('Timestamp (ns) Clock Offset: ' + str(self.time_offset))
-        header_fields.append(str(hex(self.id)) + " Pos_x (mm)")
-        header_fields.append(str(hex(self.id)) + " Pos_y (mm)")
-        header_fields.append(str(hex(self.id)) + " Pos_z (mm)")
-        header_fields.append(str(hex(self.id)) + " Pressure (Pa)")
-        header_fields.append(str(hex(self.id)) + " Temperature (C)")
+        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
+        header_fields.append("id_" + str(hex(self.id)) + "_Pos_x_mm")
+        header_fields.append("id_" + str(hex(self.id)) + "_Pos_y_mm")
+        header_fields.append("id_" + str(hex(self.id)) + "_Pos_z_mm")
+        header_fields.append("id_" + str(hex(self.id)) + "_Pressure_Pa")
+        header_fields.append("id_" + str(hex(self.id)) + "_Temperature_C")
         return header_fields
 
     def setAnchorsManual(self, anchors):
@@ -453,12 +462,16 @@ class PozyxPositionSource(DataSource):
 
         status = self.pozyx.doPositioning(position, self.dimension, self.algorithm)
         data_values.append(time_ns() - self.time_offset)
+        
         if status is pypozyx.POZYX_SUCCESS:
             data_values.append(str(position.x))
             data_values.append(str(position.y))
             data_values.append(str(position.z))
+            print(data_values)
         else:
             data_values += [''] * 3
+            #print("BONG BONG WOO")
+            #data_values += ["a"] * 3
 
         pres_data = pypozyx.Pressure()
         self.pozyx.getPressure_Pa(pres_data)
@@ -467,7 +480,7 @@ class PozyxPositionSource(DataSource):
         temp_data = pypozyx.Temperature()
         self.pozyx.getTemperature_c(temp_data)
         data_values.append(temp_data.value)
-
+        
         return data_values
 
 # Modified tutorial. http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
@@ -494,13 +507,14 @@ def pozyx_node():
 
     # Initialize publishers
     rospy.init_node('pozyx_node', anonymous=True)
-    pub_range = rospy.Publisher('pozyx_range', String, queue_size=10) # Wont this result in publishing String?
-    pub_imu = rospy.Publisher('pozyx_imu', String, queue_size=10)
+    pub_range = rospy.Publisher('pozyx_range', range_msg, queue_size=10) # Wont this result in publishing String?
+    pub_imu = rospy.Publisher('pozyx_imu', imu_msg, queue_size=10)
     #pub_pos = rospy.Publisher('pozyx_position', String, queue_size=10) 
 
     # Get all headers
     headers_range = range_source.getHeader()
     headers_imu = imu_source.getHeader()
+
     #headers_pos = pos_source.getHeader()
 
     rate = rospy.Rate(10) # 10hz - What does Husky actually use?
@@ -516,11 +530,9 @@ def pozyx_node():
         # Pass the message using kwargs i.e. pub_range.publish(message_field_1='foo', message_field_2='bar')
 
         # pub_range.publish(cat="1") 
-        print(headers_range)
         pub_range.publish(**dict(zip(headers_range, data_range))) 
-        pub_range.publish(**dict(zip(headers_range, data_range))) 
-
-        rate.sleep()
+        pub_imu.publish(**dict(zip(headers_imu, data_imu))) 
+        
 
 if __name__ == '__main__':
     try:

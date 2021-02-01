@@ -21,6 +21,22 @@ In the resulting package create scripts folder where
 python scripts are. Modify package CMakeLists.txt file to install python. 
 
 
+MESSAGE FILE SPECIFICATION
+---------------------------------------
+Messages that are transmitted by ROS publishers need their format to be specified in 
+their own message file in the project. This contains field names as well as datatypes. 
+Field names must be be alphanumeric together with underscores, starting with a letter.  
+The Python code for generating the header must match the message files. 
+
+
+Process that was followed for generating headers: 
+
+1) Get the headers by print statement. Create message file as per ROS tutorial. 
+2) Replace parantheses with _lpar_, _rpar_
+3) Replace spaces with _
+4) Replace colons with _colon_
+5) Replace (space)0x with zero_x because message has to start with a letter. (space) denotes an actual space. 
+
 FOLLOWING POSSIBLY DEPRECATED, KEPT FOR REFERENCE
 ---------------------------------------
 Requirements installation, in virtual environment. For this project venv is useful

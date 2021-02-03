@@ -11,3 +11,6 @@ float64 id_0x6a7b_RSS_to_0x6f4a_dB
 uint64 id_0x6a7b_to_0x6f61Boot_Time_Pozyx_ms
 float64 id_0x6a7b_Range_to_0x6f61_mm
 float64 id_0x6a7b_RSS_to_0x6f61_dB
+uint64 id_0x6a7b_to_0x6f58Boot_Time_Pozyx_ms
+float64 id_0x6a7b_Range_to_0x6f58_mm
+float64 id_0x6a7b_RSS_to_0x6f58_dB

@@ -4,13 +4,13 @@ See http://wiki.ros.org/Packages
 ```
 catkin_ws/src/pozyx_ros_node/
     src/
-		data_collector.py (maybe this can be deleted)
-		pozyx_publisher.py ---> pozyx_node.py (to be renamed)
-	msg/
-	launch/
-	    Any launch files we might want to include here
+        data_collector.py (maybe this can be deleted)
+        pozyx_publisher.py ---> pozyx_node.py (to be renamed)
+    msg/
+    launch/
+        Any launch files we might want to include here
     package.xml
-	CMakeLists.txt
+    CMakeLists.txt
 ```
 - There should not be a requirements.txt file, or use of a `venv`. `rosdep` is the tool that should be used to manage dependencies.
 - The dependencies on `pypozyx` and `pyserial` should be added to `package.xml` 

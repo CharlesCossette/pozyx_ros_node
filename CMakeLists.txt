@@ -11,12 +11,9 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  geometry_msgs
   message_generation
 )
-
-
-
-
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -54,9 +51,8 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
    FILES
-#   Message1.msg
-   imu_msg.msg
-   range_msg.msg
+   PozyxImu.msg
+   PozyxRange.msg
  )
 
 ## Generate services in the 'srv' folder
@@ -77,6 +73,7 @@ add_message_files(
 generate_messages(
    DEPENDENCIES
    std_msgs
+   geometry_msgs
 )
 
 ################################################
@@ -112,10 +109,10 @@ catkin_package(
 #  INCLUDE_DIRS include
   LIBRARIES pozyx_ros_node
   CATKIN_DEPENDS roscpp rospy std_msgs
-  DEPENDS message_runtime
+  DEPENDS message_runtime 
 )
 
-catkin_install_python(PROGRAMS scripts/pozyx_publisher.py
+catkin_install_python(PROGRAMS src/pozyx_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

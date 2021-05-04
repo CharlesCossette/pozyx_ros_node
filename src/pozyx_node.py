@@ -5,8 +5,6 @@ import rospy
 import yaml
 import rospkg
 from std_msgs.msg import String
-
-# from package-name.msg import custom_msg
 from pozyx_ros_node.msg import PozyxRange, PozyxImu
 from time import time
 
@@ -375,19 +373,6 @@ class PozyxPositionSource(DataSource):
             status_range = self.pozyx.doRanging(id, device_range)
         print(device_range.distance)
 
-    def getHeader(self):
-        """
-        Creates the header for the pozyx position source.
-        """
-        header_fields = list()
-        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
-        header_fields.append("id_" + str(hex(self.id)) + "_Pos_x_mm")
-        header_fields.append("id_" + str(hex(self.id)) + "_Pos_y_mm")
-        header_fields.append("id_" + str(hex(self.id)) + "_Pos_z_mm")
-        header_fields.append("id_" + str(hex(self.id)) + "_Pressure_Pa")
-        header_fields.append("id_" + str(hex(self.id)) + "_Temperature_C")
-        return header_fields
-
     def setAnchorsManual(self, anchors):
         """
         Adds the manually measured anchors to the Pozyx's device list
@@ -456,9 +441,6 @@ def pozyx_node():
     pub_range = rospy.Publisher('range', PozyxRange, queue_size=10) # Wont this result in publishing String?
     pub_imu = rospy.Publisher('imu', PozyxImu, queue_size=10)
     #pub_pos = rospy.Publisher('pozyx_position', String, queue_size=10) 
-
-    # Get all headers
-    #headers_pos = pos_source.getHeader()
 
     while not rospy.is_shutdown():
         range_msg =  range_source.getData()

@@ -19,7 +19,9 @@ rosdep install pozyx_ros_node
 ```
 > Note: you can also use the newer `catkin build` instead of `catkin_make`, but you need to stick to one or the other.
 
-Then, launch the node with 
+## Usage
+
+Launch the node with 
 ```
 rosrun pozyx_ros_node pozyx_node.launch. 
 ```
@@ -27,16 +29,16 @@ Alternatively, you can start the individual node randomly, after having started 
 ```
 rosrun pozyx_ros_node pozyx_node.py 
 ```
-Range/distance data is available on the `/pozyx_range` topic, and the imu data is available on the  `/pozyx_range`. To see the output you can open a terminal and type
+Range/distance data is available on the `/pozyx/DEVICE_ID/range` topic, and the imu data is available on the  `/pozyx/DEVICE_ID/imu`. To see the output you can open a terminal and type
 ```
-rostopic echo /pozyx_range
+rostopic echo /pozyx/DEVICE_ID/range
 ```
+# Specifying UWB Anchor Coordinates (for positioning)
+To get the UWB modules to actually calculate x, y, z position coordinates, the anchor positions need to be specified. This can be found in the `./config/anchors.yaml` folder. Specify the anchors accordingly. The YAML file is loaded when the `pozyx_node` is initalized. Hence, if you make changes to `anchors.yaml`, you need to restart/relaunch the node.
 
 ## TODO
-1. Positioning still needs to be implemented.
-2. Check serial connection issue on the husky. Sometimes the husky wont automatically detect a Pozyx device is connected by USB.
-3. allow_self_ranging to be a user option.
-4. finish implementation for multiple pozyx devices.
+1. Positioning needs to be finalized. Its all implemented, its just that it needs to be turned on with a user option, not on by default, since it wont work if there arnt enough anchors in the room.
+2. allow more user options for all sorts of data collection settings.
 
 
 

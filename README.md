@@ -23,7 +23,7 @@ rosdep install pozyx_ros_node
 
 Launch the node with 
 ```
-rosrun pozyx_ros_node pozyx_node.launch. 
+roslaunch pozyx_ros_node pozyx_node.launch. 
 ```
 Alternatively, you can start the individual node randomly, after having started a ROS Core.
 ```

@@ -65,15 +65,21 @@ def findPozyxSerial():
     pozyx_ids = list()
     for serial_port in pozyx_devices:
         rospy.loginfo('Attempting connection to Pozyx device on ' + serial_port)
-        pozyx = pypozyx.PozyxSerial(serial_port)
-        who_am_i = pypozyx.NetworkID()
-        status = pozyx.getNetworkId(who_am_i)
-        if status == pypozyx.POZYX_FAILURE:
-            rospy.logwarn("ERROR: Failed to obtain device ID.")
+        try:
+            pozyx = pypozyx.PozyxSerial(serial_port)
+        except:
+            rospy.loginfo('Connection to ' + serial_port + ' failed, possibly'
+                          +'because it is not a pozyx device.')
         else:
-            rospy.loginfo('SUCCESS: Pozyx Device ' + str(hex(who_am_i.id)) + ' connected.')
-            pozyx_serials.append(pozyx)
-            pozyx_ids.append(who_am_i.id)
+            who_am_i = pypozyx.NetworkID()
+            status = pozyx.getNetworkId(who_am_i)
+            if status == pypozyx.POZYX_FAILURE:
+                rospy.logwarn("ERROR: Failed to obtain device ID.")
+            else:
+                rospy.loginfo('SUCCESS: Pozyx Device ' + str(hex(who_am_i.id))
+                              + ' connected.')
+                pozyx_serials.append(pozyx)
+                pozyx_ids.append(who_am_i.id)
 
     return pozyx_serials, pozyx_ids
 
@@ -180,7 +186,7 @@ class PozyxImuSource(DataSource):
             self.id = who_am_i.id
         
         self._imu_msg.id = self.id
-        rospy.loginfo('Initalization complete.')
+        rospy.loginfo('Pozyx IMU: Initalization complete.')
 
     def getData(self):
         """
@@ -276,6 +282,7 @@ class PozyxRangeSource(DataSource):
         self.device_list = findNeighbors(self.pozyx, self.remote_id)
         self._neighbor_to_range = 0
         self._number_of_neighbors = len(self.device_list.data)
+        rospy.loginfo('Pozyx Ranging: Initalization complete.')
 
     def getData(self):
         """
@@ -331,7 +338,7 @@ class PozyxPositionSource(DataSource):
         self.id = who_am_i.id
         self.rangeOnceToAll()
         self.setAnchorsManual(anchors)
-        rospy.loginfo('Initalization complete.')
+        rospy.loginfo('Pozyx Positioning: Initalization complete.')
 
     def rangeOnceToAll(self):
         """
@@ -431,15 +438,15 @@ def pozyx_node():
     # multiple. we can do this once we have it figured out for one. 
     # TODO: Position source not yet enabled.
     # TODO: allow_self_ranging to be a user option.
-    imu_source = PozyxImuSource(pozyxs[0])
+    imu_source = PozyxImuSource(pozyxs[0], quad=True)
     range_source = PozyxRangeSource(pozyxs[0], exclude_ids=ids,
                                             allow_self_ranging=False)
     #anchors = loadAnchorInfo()
     #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
 
    
-    pub_range = rospy.Publisher('range', PozyxRange, queue_size=10) # Wont this result in publishing String?
-    pub_imu = rospy.Publisher('imu', PozyxImu, queue_size=10)
+    pub_range = rospy.Publisher('~/pozyx/range', PozyxRange, queue_size=10) # Wont this result in publishing String?
+    pub_imu = rospy.Publisher('~/pozyx/imu', PozyxImu, queue_size=10)
     #pub_pos = rospy.Publisher('pozyx_position', String, queue_size=10) 
 
     while not rospy.is_shutdown():

@@ -53,6 +53,7 @@ add_message_files(
    FILES
    PozyxImu.msg
    PozyxRange.msg
+   PozyxPosition.msg
  )
 
 ## Generate services in the 'srv' folder

@@ -5,7 +5,7 @@ import rospy
 import yaml
 import rospkg
 from std_msgs.msg import String
-from pozyx_ros_node.msg import PozyxRange, PozyxImu
+from pozyx_ros_node.msg import PozyxRange, PozyxImu, PozyxPosition
 from time import time
 
 # Yea so nanoseconds are really annoying. 
@@ -68,7 +68,7 @@ def findPozyxSerial():
         try:
             pozyx = pypozyx.PozyxSerial(serial_port)
         except:
-            rospy.loginfo('Connection to ' + serial_port + ' failed, possibly'
+            rospy.loginfo('Connection to ' + serial_port + ' failed, possibly '
                           +'because it is not a pozyx device.')
         else:
             who_am_i = pypozyx.NetworkID()
@@ -127,14 +127,10 @@ def findNeighbors(pozyx, remote_id = None):
 
 class DataSource(object):
     """
-    Abstract class. Your data source objects should inherit this class. The
-
-        self.data_ready [boolean]
-
-    property can be used to signal to the data collector when new data is ready
-    for collection.
+    Abstract class. Your data source objects should inherit this class. 
     """
     def __init__(self):
+        self._pub = None
         pass
 
     def getData(self):
@@ -146,6 +142,12 @@ class DataSource(object):
         """
         raise NotImplementedError(
             "You need to implement a getData() function in your data source.")
+    def publish(self):
+        if self._pub is not None:
+            data = self.getData()
+            self._pub.publish(data)
+        else:
+            rospy.logerr_once('Publisher not defined for ' + str(type(self)))
 
 class PozyxImuSource(DataSource):
     """
@@ -176,6 +178,7 @@ class PozyxImuSource(DataSource):
         # Internal variables
         self._pozyx = pozyx
         self._imu_msg = PozyxImu()
+
         who_am_i = pypozyx.NetworkID()
         self._pozyx.getNetworkId(who_am_i)
         if self.remote_id is not None:
@@ -185,6 +188,9 @@ class PozyxImuSource(DataSource):
         else:
             self.id = who_am_i.id
         
+
+        self._pub = rospy.Publisher('~/pozyx/' + str(hex(who_am_i.id)) + '/imu',
+                                    PozyxImu, queue_size=10)
         self._imu_msg.id = self.id
         rospy.loginfo('Pozyx IMU: Initalization complete.')
 
@@ -192,9 +198,6 @@ class PozyxImuSource(DataSource):
         """
         Reads the Pozyx IMU/mag/barometer and returns the data as a list.
         """
-
-        # Containers for storing the data
-        data_values = list()
 
         # Hold until a new IMU measurement is available.
         self._pozyx.waitForFlagSafe(pypozyx.PozyxBitmasks.INT_MASK_IMU, 0.1)
@@ -232,10 +235,10 @@ class PozyxImuSource(DataSource):
         if self.record_quat:
             quat_data = pypozyx.Quaternion()
             self._pozyx.getQuaternion(quat_data, remote_id=self.remote_id)
-            self._imu_msg.quaternion.w = quat_data.w
-            self._imu_msg.quaternion.x = quat_data.x
-            self._imu_msg.quaternion.y = quat_data.y
-            self._imu_msg.quaternion.z = quat_data.z
+            self._imu_msg.orientation.w = quat_data.w
+            self._imu_msg.orientation.x = quat_data.x
+            self._imu_msg.orientation.y = quat_data.y
+            self._imu_msg.orientation.z = quat_data.z
 
         if self.record_pres:
             pres_data = pypozyx.Pressure()
@@ -282,6 +285,8 @@ class PozyxRangeSource(DataSource):
         self.device_list = findNeighbors(self.pozyx, self.remote_id)
         self._neighbor_to_range = 0
         self._number_of_neighbors = len(self.device_list.data)
+        self._pub = rospy.Publisher('~/pozyx/' + str(hex(who_am_i.id)) + '/range',
+                                    PozyxRange, queue_size=10)
         rospy.loginfo('Pozyx Ranging: Initalization complete.')
 
     def getData(self):
@@ -323,8 +328,8 @@ class PozyxRangeSource(DataSource):
         return range_msg
 
 class PozyxPositionSource(DataSource):
-
-    def __init__(self, pozyx, anchors):
+    # TODO: support remote_id. currently doesnt work.
+    def __init__(self, pozyx, anchors, remote_id = None):
         super().__init__()
 
         # positioning algorithm to use, other is PozyxConstants.POSITIONING_ALGORITHM_UWB_ONLY
@@ -333,9 +338,19 @@ class PozyxPositionSource(DataSource):
         self.dimension = pypozyx.PozyxConstants.DIMENSION_3D
         self.time_offset = 0
         self.pozyx = pozyx
+        self.remote_id = remote_id
+
         who_am_i = pypozyx.NetworkID()
         self.pozyx.getNetworkId(who_am_i)
-        self.id = who_am_i.id
+        if self.remote_id is not None:
+            self.id = remote_id
+            print('Accessing ' + str(hex(self.id)) + ' remotely from ' \
+                  + str(hex(who_am_i.id) + '.'))
+        else:
+            self.id = who_am_i.id
+
+        self._pub = rospy.Publisher('~/pozyx/' + str(hex(who_am_i.id)) + '/position',
+                                    PozyxPosition, queue_size=10)
         self.rangeOnceToAll()
         self.setAnchorsManual(anchors)
         rospy.loginfo('Pozyx Positioning: Initalization complete.')
@@ -431,32 +446,25 @@ def pozyx_node():
     rospy.init_node('pozyx_node', anonymous=True)
 
     pozyxs, ids = findPozyxSerial()
+    #anchors = loadAnchorInfo()
 
     # Create data source objects
     # TODO: we need user toggles to collect these or not.
-    # TODO: currently only supporting one single pozyx sensor. need to extend to
-    # multiple. we can do this once we have it figured out for one. 
     # TODO: Position source not yet enabled.
     # TODO: allow_self_ranging to be a user option.
-    imu_source = PozyxImuSource(pozyxs[0], quad=True)
-    range_source = PozyxRangeSource(pozyxs[0], exclude_ids=ids,
-                                            allow_self_ranging=False)
-    #anchors = loadAnchorInfo()
-    #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
 
-   
-    pub_range = rospy.Publisher('~/pozyx/range', PozyxRange, queue_size=10) # Wont this result in publishing String?
-    pub_imu = rospy.Publisher('~/pozyx/imu', PozyxImu, queue_size=10)
-    #pub_pos = rospy.Publisher('pozyx_position', String, queue_size=10) 
+    data_sources = []
+    for pozyx in pozyxs:
+        imu_source = PozyxImuSource(pozyx, quat=True)
+        range_source = PozyxRangeSource(pozyx, exclude_ids=ids,
+                                            allow_self_ranging=False)
+        #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
+        data_sources.append(imu_source)
+        data_sources.append(range_source)
 
     while not rospy.is_shutdown():
-        range_msg =  range_source.getData()
-        imu_msg =  imu_source.getData()
-        #data_pos = pos_source.getData() 
-
-        pub_range.publish(range_msg) 
-        pub_imu.publish(imu_msg) 
-        
+        for data_source in data_sources:
+            data_source.publish()        
 
 if __name__ == '__main__':
     try:

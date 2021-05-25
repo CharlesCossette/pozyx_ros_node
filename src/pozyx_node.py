@@ -2,15 +2,39 @@
 
 import pypozyx
 import rospy
+import yaml
+import rospkg
 from std_msgs.msg import String
-
-# from package-name.msg import custom_msg
-from pozyx_ros_node.msg import range_msg, imu_msg
+from pozyx_ros_node.msg import PozyxRange, PozyxImu, PozyxPosition
 from time import time
 
 # Yea so nanoseconds are really annoying. 
 # Can we change this?
 time_ns = lambda: int(round(time() * 1e9))
+
+def loadAnchorInfo():
+    """ 
+    Reads the yaml file located at /pozyx_ros_node/config/anchors.yaml
+    to read anchor information.
+    """
+    rp = rospkg.RosPack()
+    path = rp.get_path('pozyx_ros_node')
+    with open(path + '/config/anchors.yaml') as file:
+        anchor_list = yaml.load(file, Loader=yaml.FullLoader)
+
+    anchor_list_pozyx = list()
+    for anchor_key in anchor_list:
+        anchor = anchor_list[anchor_key]
+        anchor_coordinates = pypozyx.Coordinates(anchor['x'], anchor['y'], anchor['z'])
+        anchor_list_pozyx.append(
+            pypozyx.DeviceCoordinates(anchor['id'], 1, anchor_coordinates)
+        )
+        rospy.loginfo('Anchor ' + str(hex(anchor['id'])) + ' configured:'\
+                      + ' x: ' + str(anchor['x']) \
+                      + ' y: ' + str(anchor['y']) \
+                      + ' z: ' + str(anchor['z']))
+    
+    return anchor_list_pozyx
 
 def findPozyxSerial():
     """
@@ -30,25 +54,32 @@ def findPozyxSerial():
             pozyx_devices.append(port.device)
 
     if not pozyx_devices:
-        print("No Pozyx connected. Check your USB cable or your driver!")
+        rospy.logerr("No Pozyx connected. Check your USB cable or your driver!")
         quit()
     else:
-        print("Pozyx device(s) detected on serial port(s): " \
+        rospy.loginfo("Pozyx device(s) detected on serial port(s): " \
               + str(pozyx_devices) + ".")
 
     # Initialize connection to serial port.
     pozyx_serials = list()
     pozyx_ids = list()
-    #for serial_port in pozyx_devices:
-    #print(serial_port)
-    pozyx = pypozyx.PozyxSerial('/dev/ttyACM0')
-    who_am_i = pypozyx.NetworkID()
-    status = pozyx.getNetworkId(who_am_i)
-    if status == pypozyx.POZYX_FAILURE:
-        print("ERROR: Failed to obtain device ID.")
-
-    pozyx_serials.append(pozyx)
-    pozyx_ids.append(who_am_i.id)
+    for serial_port in pozyx_devices:
+        rospy.loginfo('Attempting connection to Pozyx device on ' + serial_port)
+        try:
+            pozyx = pypozyx.PozyxSerial(serial_port)
+        except:
+            rospy.loginfo('Connection to ' + serial_port + ' failed, possibly '
+                          +'because it is not a pozyx device.')
+        else:
+            who_am_i = pypozyx.NetworkID()
+            status = pozyx.getNetworkId(who_am_i)
+            if status == pypozyx.POZYX_FAILURE:
+                rospy.logwarn("ERROR: Failed to obtain device ID.")
+            else:
+                rospy.loginfo('SUCCESS: Pozyx Device ' + str(hex(who_am_i.id))
+                              + ' connected.')
+                pozyx_serials.append(pozyx)
+                pozyx_ids.append(who_am_i.id)
 
     return pozyx_serials, pozyx_ids
 
@@ -80,16 +111,14 @@ def findNeighbors(pozyx, remote_id = None):
     device_list_size = pypozyx.SingleRegister()
     pozyx.getDeviceListSize(device_list_size, remote_id=remote_id)
     device_list = pypozyx.DeviceList(list_size=device_list_size.value)
-    pozyx.getDeviceIds(device_list, remote_id=remote_id)
-
-    # Print device list
-    # TODO: we will have to check these print statements with the ROS framework.
-    # What is the best way to print info to screen with ROS?
-    id_string = "Device " + str(hex(who_am_i.id)) + " has discovered the following other devices: " 
-    for id in device_list.data:
-        id_string += str(hex(id)) + ", "
-
-
+    if device_list_size > 0:
+        pozyx.getDeviceIds(device_list, remote_id=remote_id)    
+        id_string = "Device " + str(hex(who_am_i.id)) + " has discovered the following other devices: " 
+        for id in device_list.data:
+            id_string += str(hex(id)) + ", "
+        rospy.loginfo(id_string)
+    else:
+        rospy.loginfo('No other Pozyx devices discovered in range.')
 
     # if not allow_self_ranging:
     #     print("However, self-ranging is currently deactivated. " \
@@ -98,27 +127,11 @@ def findNeighbors(pozyx, remote_id = None):
 
 class DataSource(object):
     """
-    Abstract class. Your data source objects should inherit this class. The
-
-        >>> self.data_ready [boolean]
-
-    property can be used to signal to the data collector when new data is ready
-    for collection.
+    Abstract class. Your data source objects should inherit this class. 
     """
-
     def __init__(self):
-        self.data_ready = True
-
-    def getHeader(self):
-        """
-        This is a virtual function.
-
-        This function should return the headers for each column as a list of
-        headers for each column.
-        """
-
-        raise NotImplementedError(
-            "You need to implement a getHeader() function in your data source.")
+        self._pub = None
+        pass
 
     def getData(self):
         """
@@ -127,9 +140,14 @@ class DataSource(object):
         This function should return a list of data values, for each column of
         this data source.
         """
-
         raise NotImplementedError(
             "You need to implement a getData() function in your data source.")
+    def publish(self):
+        if self._pub is not None:
+            data = self.getData()
+            self._pub.publish(data)
+        else:
+            rospy.logerr_once('Publisher not defined for ' + str(type(self)))
 
 class PozyxImuSource(DataSource):
     """
@@ -156,112 +174,78 @@ class PozyxImuSource(DataSource):
         self.record_euler = euler
         self.record_quat = quat
         self.remote_id = remote_id
-        self.time_offset = 0
+
         # Internal variables
-        self.pozyx = pozyx
+        self._pozyx = pozyx
+        self._imu_msg = PozyxImu()
+
         who_am_i = pypozyx.NetworkID()
-        self.pozyx.getNetworkId(who_am_i)
+        self._pozyx.getNetworkId(who_am_i)
         if self.remote_id is not None:
             self.id = remote_id
             print('Accessing ' + str(hex(self.id)) + ' remotely from ' \
                   + str(hex(who_am_i.id) + '.'))
         else:
             self.id = who_am_i.id
-        print('Initalization complete.')
+        
 
-    def getHeader(self):
-        """
-        Generates the header for the Pozyx IMU Source.
-        """
-        header_fields = list()
-        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
-
-        # Generate the header string
-        if self.record_accel:
-            header_fields.append("id_" + str(hex(self.id)) + "_Accel_x_mg")
-            header_fields.append("id_" + str(hex(self.id)) + "_Accel_y_mg")
-            header_fields.append("id_" + str(hex(self.id)) + "_Accel_z_mg")
-
-        if self.record_gyro:
-            header_fields.append("id_" + str(hex(self.id)) + "_Gyro_x_deg_s")
-            header_fields.append("id_" + str(hex(self.id)) + "_Gyro_y_deg_s")
-            header_fields.append("id_" + str(hex(self.id)) + "_Gyro_z_deg_s")
-
-        if self.record_mag:
-            header_fields.append("id_" + str(hex(self.id)) + "_Mag_x_uT")
-            header_fields.append("id_" + str(hex(self.id)) + "_Mag_y_uT")
-            header_fields.append("id_" + str(hex(self.id)) + "_Mag_z_uT")
-
-        if self.record_euler:
-            header_fields.append("id_" + str(hex(self.id)) + "_Roll_deg")
-            header_fields.append("id_" + str(hex(self.id)) + "_Pitch_deg")
-            header_fields.append("id_" + str(hex(self.id)) + "_Yaw_deg")
-
-        if self.record_quat:
-            header_fields.append("id_" + str(hex(self.id)) + "_Quat_w")
-            header_fields.append("id_" + str(hex(self.id)) + "_Quat_x")
-            header_fields.append("id_" + str(hex(self.id)) + "_Quat_y")
-            header_fields.append("id_" + str(hex(self.id)) + "_Quat_z")
-
-        if self.record_pres:
-            header_fields.append("id_" + str(hex(self.id)) + "_Pressure_Pa")
-        return header_fields
+        self._pub = rospy.Publisher('~/pozyx/' + str(hex(who_am_i.id)) + '/imu',
+                                    PozyxImu, queue_size=10)
+        self._imu_msg.id = self.id
+        rospy.loginfo('Pozyx IMU: Initalization complete.')
 
     def getData(self):
         """
         Reads the Pozyx IMU/mag/barometer and returns the data as a list.
         """
 
-        # Containers for storing the data
-        data_values = list()
-
         # Hold until a new IMU measurement is available.
-        self.pozyx.waitForFlagSafe(pypozyx.PozyxBitmasks.INT_MASK_IMU, 0.1)
+        self._pozyx.waitForFlagSafe(pypozyx.PozyxBitmasks.INT_MASK_IMU, 0.1)
 
         # Create datastring
-        data_values.append(time_ns() - self.time_offset)
+        self._imu_msg.header.stamp = rospy.Time.now()
         if self.record_accel:
             accel_data = pypozyx.Acceleration()
-            self.pozyx.getAcceleration_mg(accel_data, remote_id=self.remote_id)
-            data_values.append(accel_data.x)
-            data_values.append(accel_data.y)
-            data_values.append(accel_data.z)
+            self._pozyx.getAcceleration_mg(accel_data, remote_id=self.remote_id)
+            self._imu_msg.linear_acceleration.x = accel_data.x
+            self._imu_msg.linear_acceleration.y = accel_data.y
+            self._imu_msg.linear_acceleration.z = accel_data.z
 
         if self.record_gyro:
             gyro_data = pypozyx.AngularVelocity()
-            self.pozyx.getAngularVelocity_dps(gyro_data, remote_id=self.remote_id)
-            data_values.append(gyro_data.x)
-            data_values.append(gyro_data.y)
-            data_values.append(gyro_data.z)
+            self._pozyx.getAngularVelocity_dps(gyro_data, remote_id=self.remote_id)
+            self._imu_msg.angular_velocity.x = gyro_data.x
+            self._imu_msg.angular_velocity.y = gyro_data.y
+            self._imu_msg.angular_velocity.z = gyro_data.z
 
         if self.record_mag:
             mag_data = pypozyx.Magnetic()
-            self.pozyx.getMagnetic_uT(mag_data, remote_id=self.remote_id)
-            data_values.append(mag_data.x)
-            data_values.append(mag_data.y)
-            data_values.append(mag_data.z)
+            self._pozyx.getMagnetic_uT(mag_data, remote_id=self.remote_id)
+            self._imu_msg.magnetic_field.x = mag_data.x
+            self._imu_msg.magnetic_field.y = mag_data.y
+            self._imu_msg.magnetic_field.z = mag_data.z
 
         if self.record_euler:
             euler_data = pypozyx.EulerAngles()
-            self.pozyx.getEulerAngles_deg(euler_data, remote_id=self.remote_id)
-            data_values.append(euler_data.roll)
-            data_values.append(euler_data.pitch)
-            data_values.append(euler_data.heading)
+            self._pozyx.getEulerAngles_deg(euler_data, remote_id=self.remote_id)
+            self._imu_msg.roll = euler_data.roll
+            self._imu_msg.pitch = euler_data.pitch
+            self._imu_msg.yaw = euler_data.heading
 
         if self.record_quat:
             quat_data = pypozyx.Quaternion()
-            self.pozyx.getQuaternion(quat_data, remote_id=self.remote_id)
-            data_values.append(quat_data.w)
-            data_values.append(quat_data.x)
-            data_values.append(quat_data.y)
-            data_values.append(quat_data.z)
+            self._pozyx.getQuaternion(quat_data, remote_id=self.remote_id)
+            self._imu_msg.orientation.w = quat_data.w
+            self._imu_msg.orientation.x = quat_data.x
+            self._imu_msg.orientation.y = quat_data.y
+            self._imu_msg.orientation.z = quat_data.z
 
         if self.record_pres:
             pres_data = pypozyx.Pressure()
-            self.pozyx.getPressure_Pa(pres_data, remote_id=self.remote_id)
-            data_values.append(pres_data.value)
+            self._pozyx.getPressure_Pa(pres_data, remote_id=self.remote_id)
+            self._imu_msg.pressure = pres_data.value
 
-        return data_values
+        return self._imu_msg
 
 class PozyxRangeSource(DataSource):
     """
@@ -301,28 +285,18 @@ class PozyxRangeSource(DataSource):
         self.device_list = findNeighbors(self.pozyx, self.remote_id)
         self._neighbor_to_range = 0
         self._number_of_neighbors = len(self.device_list.data)
-
-    def getHeader(self):
-
-        """
-        Creates the header for the Pozyx Range source.
-        """
-        header_fields = list()
-        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
-        for id in self.device_list.data:
-            header_fields.append("id_" + str(hex(self.id)) \
-                                 + '_to_' + str(hex(id)) + 'Boot_Time_Pozyx_ms')
-            header_fields.append("id_" + str(hex(self.id)) \
-                                 + '_Range_to_' + str(hex(id)) + '_mm')
-            header_fields.append("id_" + str(hex(self.id)) \
-                                 + '_RSS_to_' + str(hex(id)) + '_dB')
-        return header_fields
+        self._pub = rospy.Publisher('~/pozyx/' + str(hex(who_am_i.id)) + '/range',
+                                    PozyxRange, queue_size=10)
+        rospy.loginfo('Pozyx Ranging: Initalization complete.')
 
     def getData(self):
         """
         Performs ranging with one of its neighbors. A different neighbor is
         selected on each of these function calls. Returns range and RSS data.
         """
+        range_msg = PozyxRange()
+        range_msg.local_id = self.id
+
         if len(self.device_list.data) != 0:
             # Perform the ranging, exclude self-ranging if user has chosen this.
             device_range = pypozyx.DeviceRange()
@@ -338,38 +312,24 @@ class PozyxRangeSource(DataSource):
                     # if multiple devices are used.
                     status_range = self.pozyx.doRanging(id, device_range, remote_id=self.remote_id)
 
-            # Put data in list.
-            data_values = list()
-            data_values.append(time_ns() - self.time_offset)
-            #data_values += [" "] * 3 * self._neighbor_to_range
-
-            # Placeholder for empty values here. 
-            # NaN's have to be Floats but we want to store these as integers. 
-            empty_data_value = 0
-            data_values += [empty_data_value] * 3 * self._neighbor_to_range
+            # Put data in list.            
+            range_msg.header.stamp = rospy.Time.now()
             if status_range == pypozyx.POZYX_SUCCESS:
-                data_values.append(device_range.timestamp)
-                data_values.append(device_range.distance)
-                data_values.append(device_range.RSS)
-            else:
-                #data_values += [" "] * 3
-                data_values += [empty_data_value] * 3
-            #data_values += [" "] * 3 * (len(self.device_list.data) - 1 - self._neighbor_to_range)
-            data_values += [empty_data_value] * 3 * (len(self.device_list.data) - 1 - self._neighbor_to_range)
+                range_msg.range_timestamp = device_range.timestamp
+                range_msg.range = device_range.distance
+                range_msg.rss = device_range.RSS
 
             # New neighbor for next function call.
             if self._neighbor_to_range == (self._number_of_neighbors - 1):
                 self._neighbor_to_range = 0
             else:
                 self._neighbor_to_range += 1
-        else:
-            data_values = list()
-            data_values.append(time_ns() - self.time_offset)
-        return data_values
+        
+        return range_msg
 
 class PozyxPositionSource(DataSource):
-
-    def __init__(self, pozyx, anchors):
+    # TODO: support remote_id. currently doesnt work.
+    def __init__(self, pozyx, anchors, remote_id = None):
         super().__init__()
 
         # positioning algorithm to use, other is PozyxConstants.POSITIONING_ALGORITHM_UWB_ONLY
@@ -378,17 +338,27 @@ class PozyxPositionSource(DataSource):
         self.dimension = pypozyx.PozyxConstants.DIMENSION_3D
         self.time_offset = 0
         self.pozyx = pozyx
+        self.remote_id = remote_id
+
         who_am_i = pypozyx.NetworkID()
         self.pozyx.getNetworkId(who_am_i)
-        self.id = who_am_i.id
+        if self.remote_id is not None:
+            self.id = remote_id
+            print('Accessing ' + str(hex(self.id)) + ' remotely from ' \
+                  + str(hex(who_am_i.id) + '.'))
+        else:
+            self.id = who_am_i.id
+
+        self._pub = rospy.Publisher('~/pozyx/' + str(hex(who_am_i.id)) + '/position',
+                                    PozyxPosition, queue_size=10)
         self.rangeOnceToAll()
         self.setAnchorsManual(anchors)
-        print('Initalization complete.')
+        rospy.loginfo('Pozyx Positioning: Initalization complete.')
 
     def rangeOnceToAll(self):
         """
         Automatically discovers any pozyx anchor or tag devices within UWB range,
-        and ranges to them. Apparently it helps to range ones to all the other
+        and ranges to them. Apparently it helps to range once to all the other
         devices before starting positions. Produces a more consistent position
         stream.
 
@@ -424,19 +394,6 @@ class PozyxPositionSource(DataSource):
             # if multiple devices are used.
             status_range = self.pozyx.doRanging(id, device_range)
         print(device_range.distance)
-
-    def getHeader(self):
-        """
-        Creates the header for the pozyx position source.
-        """
-        header_fields = list()
-        header_fields.append('Timestamp_ns_Clock_Offset_' + str(self.time_offset))
-        header_fields.append("id_" + str(hex(self.id)) + "_Pos_x_mm")
-        header_fields.append("id_" + str(hex(self.id)) + "_Pos_y_mm")
-        header_fields.append("id_" + str(hex(self.id)) + "_Pos_z_mm")
-        header_fields.append("id_" + str(hex(self.id)) + "_Pressure_Pa")
-        header_fields.append("id_" + str(hex(self.id)) + "_Temperature_C")
-        return header_fields
 
     def setAnchorsManual(self, anchors):
         """
@@ -483,56 +440,31 @@ class PozyxPositionSource(DataSource):
         
         return data_values
 
-# Modified tutorial. http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
+
 def pozyx_node():
+     # Initialize publishers
+    rospy.init_node('pozyx_node', anonymous=True)
+
     pozyxs, ids = findPozyxSerial()
-    
-    # TODO: This needs to go into a .yaml file 
-    anchors = [pypozyx.DeviceCoordinates(0x6f4a, 1, pypozyx.Coordinates(2594, -2110, 1845)),
-               pypozyx.DeviceCoordinates(0x6f58, 1, pypozyx.Coordinates(-75, 2116, 149)),
-               pypozyx.DeviceCoordinates(0x6f5f, 1, pypozyx.Coordinates(4731, 2149, 2120)),
-               pypozyx.DeviceCoordinates(0x6f60, 1, pypozyx.Coordinates(-4232, 460, 2400)),
-               pypozyx.DeviceCoordinates(0x6f61, 1, pypozyx.Coordinates(-505, -2080, 474))]
+    #anchors = loadAnchorInfo()
 
     # Create data source objects
     # TODO: we need user toggles to collect these or not.
-    # TODO: currently only supporting one single pozyx sensor. need to extend to
-    # multiple. we can do this once we have it figured out for one. 
     # TODO: Position source not yet enabled.
     # TODO: allow_self_ranging to be a user option.
-    imu_source = PozyxImuSource(pozyxs[0])
-    range_source = PozyxRangeSource(pozyxs[0], exclude_ids=ids,
+
+    data_sources = []
+    for pozyx in pozyxs:
+        imu_source = PozyxImuSource(pozyx, quat=True)
+        range_source = PozyxRangeSource(pozyx, exclude_ids=ids,
                                             allow_self_ranging=False)
-    #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
+        #pos_source  = PozyxPositionSource(pozyxs[0], anchors)
+        data_sources.append(imu_source)
+        data_sources.append(range_source)
 
-    # Initialize publishers
-    rospy.init_node('pozyx_node', anonymous=True)
-    pub_range = rospy.Publisher('pozyx_range', range_msg, queue_size=10) # Wont this result in publishing String?
-    pub_imu = rospy.Publisher('pozyx_imu', imu_msg, queue_size=10)
-    #pub_pos = rospy.Publisher('pozyx_position', String, queue_size=10) 
-
-    # Get all headers
-    headers_range = range_source.getHeader()
-    headers_imu = imu_source.getHeader()
-
-    #headers_pos = pos_source.getHeader()
-
-    rate = rospy.Rate(10) # 10hz - What does Husky actually use?
-                          # TODO: we need to check this.
-    
     while not rospy.is_shutdown():
-        data_range =  range_source.getData()
-        data_imu =  imu_source.getData()
-        #data_pos = pos_source.getData() 
-        # Isnt this meant for sporadic info instead of a huge datastream?
-        #rospy.loginfo(**dict(zip(headers, data_values))) 
-
-        # Pass the message using kwargs i.e. pub_range.publish(message_field_1='foo', message_field_2='bar')
-
-        # pub_range.publish(cat="1") 
-        pub_range.publish(**dict(zip(headers_range, data_range))) 
-        pub_imu.publish(**dict(zip(headers_imu, data_imu))) 
-        
+        for data_source in data_sources:
+            data_source.publish()        
 
 if __name__ == '__main__':
     try:

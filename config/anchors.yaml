@@ -1,0 +1,38 @@
+anchor1:
+  id: 0x6f4a 
+  x: 2594
+  y: -2110
+  z: 1845
+
+anchor2:
+  id: 0x6f58 
+  x: -75
+  y: 2116
+  z: 149
+
+anchor3:
+  id: 0x6f5f 
+  x: 4731
+  y: 2149
+  z: 2120
+
+anchor4:
+  id: 0x6f60 
+  x: -4232
+  y: 460
+  z: 2400
+
+anchor5:
+  id: 0x6f61 
+  x: -505
+  y: -2080
+  z: 474
+
+
+
+# TODO: This needs to go into a .yaml file 
+#   anchors = [pypozyx.DeviceCoordinates(0x6f4a, 1, pypozyx.Coordinates(2594, -2110, 1845)),
+#              pypozyx.DeviceCoordinates(0x6f58, 1, pypozyx.Coordinates(-75, 2116, 149)),
+#              pypozyx.DeviceCoordinates(0x6f5f, 1, pypozyx.Coordinates(4731, 2149, 2120)),
+#              pypozyx.DeviceCoordinates(0x6f60, 1, pypozyx.Coordinates(-4232, 460, 2400)),
+#              pypozyx.DeviceCoordinates(0x6f61, 1, pypozyx.Coordinates(-505, -2080, 474))]

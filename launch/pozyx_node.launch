@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="pozyx_ros_node" type="pozyx_node.py" name="pozyx_node" output="screen"/>
+</launch>

@@ -1,66 +1,44 @@
-## TODO: this repo needs some restructuring to make it like a more typical ROS package. It should be something like
-See http://wiki.ros.org/Packages 
-
-```
-catkin_ws/src/pozyx_ros_node/
-    src/
-        data_collector.py (maybe this can be deleted)
-        pozyx_publisher.py ---> pozyx_node.py (to be renamed)
-    msg/
-    launch/
-        Any launch files we might want to include here
-    package.xml
-    CMakeLists.txt
-```
-- There should not be a requirements.txt file, or use of a `venv`. `rosdep` is the tool that should be used to manage dependencies.
-- The dependencies on `pypozyx` and `pyserial` should be added to `package.xml` 
-
-
 # Pozyx ROS Node
-Building this repository on the Husky: 
+This repository contains functionality to connect to a Pozyx developer tag over USB, and publish range measurements to nearby devices on ROS topics. Pozyx devices within UWB range are automatically discovered, and multiple Pozyx devices connected to the local computer by USB is also supported. 
+
+## Setup
+
+First, clone this repository inside the `src` folder of your catkin workspace.
 ```
+cd <YOUR_WORKSPACE_FOLDER>/src
+git clone https://bitbucket.org/decargroup/pozyx_ros_node.
+```
+> Note: Using the url above corresponds to an HTTPS login, which will require you to type in your Bitbucket username and password every time you connect to the remote repo. Feel free to also use SSH-keys for this step.
+
+Next, still in the top-level catkin workspace folder, build the workspace using `catkin_make`, source the setup script, and install this package's dependencies.
+```
+cd <YOUR_WORKSPACE_FOLDER>
 catkin_make
-source devel/setup.bash
+source ./devel/setup.bash
+rosdep install pozyx_ros_node
 ```
+> Note: you can also use the newer `catkin build` instead of `catkin_make`, but you need to stick to one or the other.
 
-Running a specific Python script:
+## Usage
+
+Launch the node with 
 ```
-rosrun pozyx_ros_node pozyx_publisher.py 
+roslaunch pozyx_ros_node pozyx_node.launch. 
 ```
-
-Steps taken to create this repository structure: 
-Create workspace folder which is this repo, create an src directory 
-inside of it. Then in that src directory, run
+Alternatively, you can start the individual node randomly, after having started a ROS Core.
 ```
-catkin_create_pkg pozyx_ros_node std_msgs rospy roscpp
+rosrun pozyx_ros_node pozyx_node.py 
 ```
-In the resulting package create scripts folder where 
-python scripts are. Modify package CMakeLists.txt file to install python. 
+Range/distance data is available on the `/pozyx/DEVICE_ID/range` topic, and the imu data is available on the  `/pozyx/DEVICE_ID/imu`. To see the output you can open a terminal and type
+```
+rostopic echo /pozyx/DEVICE_ID/range
+```
+# Specifying UWB Anchor Coordinates (for positioning)
+To get the UWB modules to actually calculate x, y, z position coordinates, the anchor positions need to be specified. This can be found in the `./config/anchors.yaml` folder. Specify the anchors accordingly. The YAML file is loaded when the `pozyx_node` is initalized. Hence, if you make changes to `anchors.yaml`, you need to restart/relaunch the node.
 
-rosbag record /gx5/filtered/imu/data /gx5/imu/data /pozyx_imu /pozyx_range
-
-
-
-MESSAGE FILE SPECIFICATION
----------------------------------------
-Messages that are transmitted by ROS publishers need their format to be specified in 
-their own message file in the project. This contains field names as well as datatypes. 
-Field names must be be alphanumeric together with underscores, starting with a letter.  
-The Python code for generating the header must match the message files. 
-
-
-FOLLOWING POSSIBLY DEPRECATED, KEPT FOR REFERENCE
----------------------------------------
-Requirements installation, in virtual environment. For this project venv is useful
-just for PyCharm where it can be selected to see library code from editor. 
-Create** virtualenv: 
-
-python3 -m venv pozyx-env
-
-source pozyx-env/bin/activate
-
-pip install -r requirements.txt
-
+## TODO
+1. Positioning needs to be finalized. Its all implemented, its just that it needs to be turned on with a user option, not on by default, since it wont work if there arnt enough anchors in the room.
+2. allow more user options for all sorts of data collection settings.
 
 
 

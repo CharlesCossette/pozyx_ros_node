@@ -6,7 +6,7 @@ This repository contains functionality to connect to a Pozyx developer tag over 
 First, clone this repository inside the `src` folder of your catkin workspace.
 ```
 cd <YOUR_WORKSPACE_FOLDER>/src
-git clone https://bitbucket.org/decargroup/pozyx_ros_node.
+git clone https://github.com/CharlesCossette/pozyx_ros_node
 ```
 > Note: Using the url above corresponds to an HTTPS login, which will require you to type in your Bitbucket username and password every time you connect to the remote repo. Feel free to also use SSH-keys for this step.
 
